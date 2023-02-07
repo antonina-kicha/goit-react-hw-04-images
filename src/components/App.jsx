@@ -1,5 +1,3 @@
-import { Component } from 'react';
-
 import { fetchImages } from 'api';
 
 import { GlobalStyle } from './GlobalStyle';
@@ -8,89 +6,101 @@ import { Searchbar } from './Searchbar/Searchbar';
 import { Button } from './Button/Button'
 import { Loader } from './Loader/Loader'
 import {Modal} from './Modal/Modal'
+import { useState, useEffect } from 'react';
 
+export const App = () => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [page, setPage] = useState(1);
+    const [loadNextPage, setLoadNextPage] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [images, setImages] = useState([]);
+    const [currentImage, setCurrentImage] = useState([]);
+    const [error, setError] = useState(null);
+    const [modalIsOpen, setModalIsOpen] = useState(false);
 
-export class App extends Component {
-    state = {
-        searchQuery: '',
-        page: 1,
-        loadNextPage: false,
-        isLoading: false,
-        images: [],
-        currentImage: [],
-        error: null,
-        modalIsOpen: false,
-    }
-    
-    handleSubmitForm = (value) => {
-        if (value){this.setState({ searchQuery: value,  page: 1, loadNextPage: false}, () => {
-            this.getImagesOnRequest();
-        })
+    const handleSubmitForm = (value) => {
+        if (value) {
+            setSearchQuery(value);
+            setPage(1);
         }
-        else { this.setState({ error: `Введите запрос в строку поиска`, images: [], loadNextPage: false }) }
-        ;
+        else {
+            setError(`Введите запрос в строку поиска`);
+            setImages([]);
+        }
+            setLoadNextPage(false);
     }
 
-    loadMoreByButton = () => {
-        const nextPage = this.state.page + 1;
-        this.setState(({ page: nextPage }), () => {
-            this.getImagesOnRequest(true)
-        });       
+    const loadMoreByButton = () => {
+        setPage(() => page + 1);
     }
 
-    loadMoreButtonView = (responceImage) => {
-        this.setState({ loadNextPage: false });
-        if (responceImage.length === 12) { this.setState({ loadNextPage: true }) }
+    const loadMoreButtonView = (responceImage) => {
+        setLoadNextPage(responceImage.length === 12);
     }
 
-    openModal = (id) => {
-        this.setState({ modalIsOpen: true });
-        this.getLargeImageInfo(id);
+    const openModal = (id) => {
+        setModalIsOpen(true);
+        getLargeImageInfo(id);
     }
 
-    closeModal = () => {
-        this.setState({ modalIsOpen: false, currentImage: [] });
+    const closeModal = () => {
+        setModalIsOpen(false);
+        setCurrentImage([]);
     }
 
-    getLargeImageInfo = (id) => {
-        const currentImage = this.state.images.find(image => Number(image.id) === Number(id));
+    const getLargeImageInfo = (id) => {
+        const currentImage = images.find(image => Number(image.id) === Number(id));
         const largeImageUrl = currentImage.largeImageURL;
         const imageAlt = currentImage.tags;
-        this.setState({ currentImage: [largeImageUrl, imageAlt] });
+        setCurrentImage([largeImageUrl, imageAlt]);
     }
 
-    async getImagesOnRequest(isLoadMore = false) {
-        try {
-      this.setState({ isLoading: true,  error: null});
-            const responce = await fetchImages(this.state.searchQuery, this.state.page);
-            const images = isLoadMore ? [...this.state.images, ...responce.hits] : responce.hits;
-            this.setState(({ images }))
-            if (images.length === 0) {
-                this.setState({ error: `Изображение по запросу  "${this.state.searchQuery}" не найдено. Попробуйте ввести другой запрос` })
-            } 
-            this.loadMoreButtonView(responce.hits);
+    useEffect(() => {
+        // console.log('запускается useEffect')
+        if (!searchQuery) {
+            // console.log('выход из useEffect');
+            return;
         }
-        catch (e) {
-            console.log(e);
-      this.setState({error: 'Попробуй перезагрузить страницу, может повезет больше'})
-        }
-        finally {
-            this.setState({ isLoading: false });
-    }
-    }
-    
-    render() {
-        return (
+       
+        async function getImagesOnRequest() {
+            try {
+                setIsLoading(true);
+                setError(null);
+                const responce = await fetchImages(searchQuery, page);
+                 if (responce.hits.length === 0) {
+                     setError(`Изображение по запросу  "${searchQuery}" не найдено. Попробуйте ввести другой запрос`);
+                     return;
+                 }
+                const imagesNew = responce.hits;
+                setImages(prev => page > 1 ? [...prev, ...imagesNew] :imagesNew);
+                loadMoreButtonView(responce.hits);
+            }
+            catch (e) {
+                console.log(e);
+                setError('Попробуй перезагрузить страницу, может повезет больше');
+            }
+            finally {
+                setIsLoading(false);
+            }
+        };
+
+        getImagesOnRequest();   
+       
+    }, [searchQuery, page, ])
+  
+  return (
             <>
                 <GlobalStyle />
-                <Searchbar onSubmit={this.handleSubmitForm} />
-                <ImageGallery images={this.state.images} error={this.state.error} openModal={this.openModal} />
-                {this.state.loadNextPage && (<Button onClick={this.loadMoreByButton}></Button>)}
-                {this.state.isLoading && (<Loader></Loader>)}
-                {this.state.modalIsOpen && (<Modal largeImageInfo={this.state.currentImage} closeModal={this.closeModal}></Modal>)}
+                <Searchbar onSubmit={handleSubmitForm} />
+                <ImageGallery images={images} error={error} openModal={openModal} />
+                {loadNextPage && (<Button onClick={loadMoreByButton}></Button>)}
+                {isLoading && (<Loader></Loader>)}
+                {modalIsOpen && (<Modal largeImageInfo={currentImage} closeModal={closeModal}></Modal>)}
             </>
         )
-    }
 }
+
+
+
 
 
